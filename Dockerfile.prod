@@ -1,0 +1,31 @@
+# Production image: build Vue admin UI + install Python app (single port 8790).
+ARG NODE_BASE_IMAGE=node:22-alpine
+ARG PYTHON_BASE_IMAGE=python:3.12-slim
+
+FROM ${NODE_BASE_IMAGE} AS web-build
+WORKDIR /web
+COPY web/package.json ./
+RUN npm install
+COPY web/ ./
+RUN npm run build
+
+FROM ${PYTHON_BASE_IMAGE}
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    WEB_DIST=/app/web/dist
+
+COPY pyproject.toml README.md ./
+COPY src ./src
+COPY --from=web-build /web/dist ./web/dist
+
+RUN pip install --no-cache-dir hatchling \
+    && pip install --no-cache-dir .
+
+EXPOSE 8790 1455
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8790/healthz', timeout=4)"
+
+CMD ["codex-pool-admin", "--host", "0.0.0.0", "--port", "8790", "--log-level", "info"]

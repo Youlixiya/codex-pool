@@ -1,0 +1,17 @@
+.git
+.cursor
+.codex
+.venv
+__pycache__
+*.pyc
+.env
+.env.*
+!.env.prod.example
+node_modules
+web/node_modules
+web/dist
+.codegraph
+*.md
+!README.md
+terminals
+agent-transcripts

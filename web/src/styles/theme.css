@@ -1,0 +1,248 @@
+@import url("https://fonts.googleapis.com/css2?family=Fira+Code:wght@500;600&family=Inter:wght@400;500;600;700;800&display=swap");
+
+:root {
+  --cp-primary: #38bdf8;
+  --cp-primary-hover: #0ea5e9;
+  --cp-primary-light: #7dd3fc;
+  --cp-accent: #8b5cf6;
+  --cp-primary-soft: #e0f7ff;
+  --cp-primary-muted: #bae6fd;
+  --cp-bg: #f5f7fb;
+  --cp-surface: #ffffff;
+  --cp-sidebar: #ffffff;
+  --cp-text: #111827;
+  --cp-text-muted: #4b5563;
+  --cp-text-subtle: #6b7280;
+  --cp-glass: #ffffff;
+  --cp-glass-strong: #ffffff;
+  --cp-glass-border: #e5e7eb;
+  --cp-glass-edge: #e5e7eb;
+  --cp-shadow: 0 8px 20px rgba(17, 24, 39, 0.08);
+  --cp-shadow-sm: 0 2px 8px rgba(17, 24, 39, 0.06);
+  --cp-blur: 0;
+  --cp-radius: 8px;
+  --cp-radius-sm: 8px;
+  --cp-transition: 200ms ease;
+
+  --el-color-primary: var(--cp-primary);
+  --el-color-primary-light-3: #7dd3fc;
+  --el-color-primary-light-5: #bae6fd;
+  --el-color-primary-light-7: #dff7ff;
+  --el-color-primary-light-8: #ecfbff;
+  --el-color-primary-light-9: #f4fdff;
+  --el-color-primary-dark-2: var(--cp-primary-hover);
+  --el-bg-color: transparent;
+  --el-bg-color-page: var(--cp-bg);
+  --el-text-color-primary: var(--cp-text);
+  --el-text-color-regular: var(--cp-text-muted);
+  --el-border-color: var(--cp-glass-edge);
+  --el-border-color-light: #eef2f7;
+  --el-fill-color-blank: var(--cp-glass-strong);
+  --el-font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--el-font-family);
+  color: var(--cp-text);
+  background: var(--cp-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.app-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background: var(--cp-bg);
+}
+
+.glass {
+  background: var(--cp-glass);
+  border: 1px solid var(--cp-glass-border);
+  box-shadow: var(--cp-shadow-sm);
+  border-radius: var(--cp-radius);
+}
+
+.glass-strong {
+  background: var(--cp-glass-strong);
+  border: 1px solid var(--cp-glass-border);
+  box-shadow: var(--cp-shadow);
+  border-radius: var(--cp-radius);
+}
+
+.glass-panel {
+  background: var(--cp-glass-strong);
+  border: 1px solid var(--cp-glass-border);
+  box-shadow: var(--cp-shadow-sm);
+  border-radius: var(--cp-radius);
+  padding: 20px 22px;
+}
+
+.page-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--cp-text-muted);
+  text-transform: uppercase;
+}
+
+.page-heading {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--cp-text);
+  margin: 4px 0 0;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 12px;
+}
+
+.mt {
+  margin-top: 20px;
+}
+
+/* Element Plus — cards & tables */
+.el-card {
+  --el-card-bg-color: var(--cp-glass-strong);
+  --el-card-border-color: var(--cp-glass-border);
+  border-radius: var(--cp-radius) !important;
+  background: var(--cp-glass-strong) !important;
+  border: 1px solid var(--cp-glass-border) !important;
+  box-shadow: var(--cp-shadow-sm) !important;
+  transition: box-shadow var(--cp-transition), border-color var(--cp-transition);
+}
+
+.el-card:hover {
+  box-shadow: var(--cp-shadow) !important;
+  border-color: #d1d5db !important;
+}
+
+.el-card__header {
+  border-bottom-color: var(--cp-glass-edge) !important;
+  font-weight: 600;
+  color: var(--cp-text);
+}
+
+.el-table {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-header-bg-color: #f8fafc;
+  --el-table-row-hover-bg-color: #f0f9ff;
+  --el-table-border-color: var(--cp-glass-edge);
+  border-radius: var(--cp-radius-sm);
+  overflow: hidden;
+}
+
+.el-table th.el-table__cell {
+  font-weight: 600;
+  color: var(--cp-text-muted);
+  font-size: 13px;
+}
+
+.el-button--primary {
+  --el-button-bg-color: var(--cp-primary);
+  --el-button-border-color: var(--cp-primary);
+  --el-button-hover-bg-color: var(--cp-primary-hover);
+  --el-button-hover-border-color: var(--cp-primary-hover);
+  border-radius: 10px;
+  font-weight: 500;
+  transition: background var(--cp-transition), border-color var(--cp-transition),
+    box-shadow var(--cp-transition);
+}
+
+.el-button--primary:hover {
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.24);
+}
+
+.el-button {
+  border-radius: 10px;
+  transition: background var(--cp-transition), color var(--cp-transition),
+    border-color var(--cp-transition);
+}
+
+.el-input__wrapper,
+.el-textarea__inner {
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 1px var(--cp-glass-edge) inset !important;
+  transition: box-shadow var(--cp-transition);
+}
+
+.el-input__wrapper:hover,
+.el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 1px var(--cp-primary-muted) inset !important;
+}
+
+.el-dialog {
+  --el-dialog-border-radius: var(--cp-radius);
+  border-radius: var(--cp-radius) !important;
+  background: var(--cp-glass-strong) !important;
+  border: 1px solid var(--cp-glass-border);
+  box-shadow: var(--cp-shadow);
+}
+
+.el-dialog__header {
+  border-bottom: 1px solid var(--cp-glass-edge);
+  margin-right: 0;
+  padding-bottom: 16px;
+}
+
+.el-dialog__title {
+  font-weight: 600;
+  color: var(--cp-text);
+}
+
+.el-switch.is-checked .el-switch__core {
+  background-color: var(--cp-primary);
+  border-color: var(--cp-primary);
+}
+
+.el-tag--success {
+  --el-tag-bg-color: #e0f7ff;
+  --el-tag-border-color: #bae6fd;
+  --el-tag-text-color: #0284c7;
+}
+
+.el-alert--warning {
+  --el-alert-bg-color: #fffbeb;
+  border-radius: var(--cp-radius-sm);
+}
+
+.el-overlay {
+  backdrop-filter: blur(4px);
+}
+
+.el-message-box {
+  border-radius: var(--cp-radius) !important;
+  background: var(--cp-glass-strong) !important;
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--cp-glass-border);
+}
