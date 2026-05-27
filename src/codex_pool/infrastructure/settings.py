@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlparse
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -25,6 +26,10 @@ class Settings(BaseSettings):
     admin_username: str = "admin"
     admin_password: str = "admin123"
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
+    # Public URL users open in the browser (e.g. http://pool.example.com). Used for CORS and upstream self-test rewrite.
+    public_base_url: str = ""
+    # Process listen port (set by codex-pool-admin on startup; default 8790).
+    admin_listen_port: int = 8790
 
     chatgpt_auth_dir: str = "~/.codex-pool/auth"
     chatgpt_oauth_client_id: str = "app_EMoamEEZ73f0CkXaXp7hrann"
@@ -37,6 +42,40 @@ class Settings(BaseSettings):
     def resolved_database_url(self) -> str:
         url = (self.database_url or "").strip()
         return url or default_database_url()
+
+    def resolved_cors_origins(self) -> list[str]:
+        origins = [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        public = (self.public_base_url or "").strip().rstrip("/")
+        if public and public not in origins:
+            origins.append(public)
+            parsed = urlparse(public)
+            if parsed.scheme == "http" and parsed.hostname:
+                origins.append(f"https://{parsed.netloc}")
+            elif parsed.scheme == "https" and parsed.hostname:
+                origins.append(f"http://{parsed.netloc}")
+        return origins
+
+    def public_hostname(self) -> str | None:
+        public = (self.public_base_url or "").strip()
+        if not public:
+            return None
+        return urlparse(public).hostname
+
+    @staticmethod
+    def infer_public_base_url(
+        *,
+        host: str | None,
+        forwarded_proto: str | None = None,
+    ) -> str:
+        """Derive http(s)://host from reverse-proxy headers when PUBLIC_BASE_URL is unset."""
+        h = (host or "").strip()
+        if not h or h.startswith("127.0.0.1") or h.startswith("localhost"):
+            return ""
+        if "," in h:
+            h = h.split(",", 1)[0].strip()
+        hostname = h.rsplit(":", 1)[0] if ":" in h and not h.startswith("[") else h
+        proto = (forwarded_proto or "http").split(",", 1)[0].strip() or "http"
+        return f"{proto}://{hostname}".rstrip("/")
 
 
 @lru_cache

@@ -96,7 +96,7 @@ wire_api = "responses"
 ```bash
 git clone https://github.com/Youlixiya/codex-pool.git && cd codex-pool
 uv sync && cp .env.example .env
-# 编辑 JWT_SECRET、CORS_ORIGINS=http://你的域名
+# 编辑 JWT_SECRET、PUBLIC_BASE_URL=http://你的域名、CORS_ORIGINS（可与公网域名一致）
 
 uv run codex-pool-admin --host 0.0.0.0 --port 8790 --log-level info
 ```
@@ -109,15 +109,21 @@ uv run codex-pool-admin --host 0.0.0.0 --port 8790 --log-level info
 
 | 变量 | 说明 |
 |------|------|
-| `JWT_SECRET` / `ADMIN_*` | 登录；首次启动创建 admin |
-| `CORS_ORIGINS` | 管理后台允许的浏览器来源 |
+| `JWT_SECRET` / `ADMIN_*` | 登录；每次启动将账号密码同步到数据库 |
+| `PUBLIC_BASE_URL` | 浏览器访问的完整地址（如 `http://pool.example.com`），用于连接测试回环与 CORS |
+| `CORS_ORIGINS` | 管理后台允许的浏览器来源（设置 `PUBLIC_BASE_URL` 时会自动补充） |
 | `DATABASE_URL` | 可选；默认 `~/.codex-pool/codex_pool.db` |
 | `BILLING_*` | 每百万 token 单价 |
 | `CHATGPT_*` | OAuth 回调端口与凭证目录 |
 
 ## ChatGPT 网页授权
 
-管理后台 → **上游账号** → **chatgpt (OAuth)** → **打开网页授权**。本机 **1455** 端口需空闲（可通过 `CHATGPT_OAUTH_CALLBACK_PORT` 修改）。
+管理后台 → **上游账号** → **chatgpt (OAuth)** → **打开网页授权**。
+
+- **本机访问**：默认回调 `http://127.0.0.1:1455/auth/callback`，本机 **1455** 端口需空闲。
+- **远程通过域名访问**：授权后浏览器会打开您电脑上的 `localhost:1455`，需先把该端口转发到服务器，例如  
+  `ssh -L 1455:127.0.0.1:8790 user@your-server`  
+  然后再点「打开网页授权」。管理界面会显示具体命令。
 
 ## 参与贡献
 

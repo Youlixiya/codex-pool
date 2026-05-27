@@ -36,6 +36,8 @@ def main() -> None:
     else:
         os.environ.pop("CODEX_POOL_NO_PROXY", None)
 
+    os.environ["ADMIN_LISTEN_PORT"] = str(args.port)
+
     uvicorn.run(
         "codex_pool.admin_app:app",
         host=args.host,

@@ -16,6 +16,8 @@ from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import httpx
+from fastapi import APIRouter, Request
+from starlette.responses import HTMLResponse
 
 from ..infrastructure.oauth_store import (
     bind_state,
@@ -189,6 +191,40 @@ def _complete_session(session_id: str, *, status: str, email: str | None = None,
     _save_session(session_id, data)
 
 
+def oauth_redirect_port() -> int:
+    parsed = urlparse(get_settings().chatgpt_oauth_redirect_uri)
+    if parsed.port:
+        return parsed.port
+    return 443 if parsed.scheme == "https" else 80
+
+
+def oauth_callback_path() -> str:
+    return urlparse(get_settings().chatgpt_oauth_redirect_uri).path or "/auth/callback"
+
+
+def uses_integrated_oauth_callback() -> bool:
+    """True when the redirect URI is served on the main admin/proxy port (e.g. SSH -L 1455:127.0.0.1:8790)."""
+    return oauth_redirect_port() == get_settings().admin_listen_port
+
+
+def remote_oauth_setup_hint(*, request_host: str | None = None) -> dict[str, str] | None:
+    """Instructions when the admin UI is opened remotely; OAuth still redirects to loopback."""
+    host = (request_host or "").strip().lower()
+    if not host or host in ("localhost", "127.0.0.1", "::1"):
+        return None
+    port = oauth_redirect_port()
+    listen = get_settings().admin_listen_port
+    tunnel = f"ssh -L {port}:127.0.0.1:{listen} user@your-server"
+    return {
+        "message": (
+            "远程访问时，浏览器授权后会跳转到您本机的 localhost，"
+            f"需先将本机 {port} 端口转发到服务器上的服务端口 {listen}。"
+        ),
+        "ssh_tunnel_command": tunnel,
+        "redirect_uri": get_settings().chatgpt_oauth_redirect_uri,
+    }
+
+
 def _handle_oauth_callback(query: dict[str, list[str]]) -> None:
     state_list = query.get("state", [])
     code_list = query.get("code", [])
@@ -273,14 +309,29 @@ _ERROR_HTML = """<!DOCTYPE html>
 """
 
 
+def _oauth_callback_response(query: dict[str, list[str]]) -> HTMLResponse:
+    if query.get("error"):
+        return HTMLResponse(_ERROR_HTML, status_code=400)
+    _handle_oauth_callback(query)
+    return HTMLResponse(_CALLBACK_HTML)
+
+
+def register_oauth_callback_routes(router: APIRouter) -> None:
+    path = oauth_callback_path()
+
+    @router.get(path, response_class=HTMLResponse, include_in_schema=False)
+    async def oauth_callback(request: Request) -> HTMLResponse:
+        query = {k: request.query_params.getlist(k) for k in request.query_params}
+        return _oauth_callback_response(query)
+
+
 class _OAuthCallbackHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         logger.debug("oauth callback: " + format, *args)
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
-        settings = get_settings()
-        expected_path = urlparse(settings.chatgpt_oauth_redirect_uri).path or "/auth/callback"
+        expected_path = oauth_callback_path()
 
         if parsed.path != expected_path:
             self.send_response(404)
@@ -308,13 +359,17 @@ _server_lock = threading.Lock()
 
 
 def ensure_callback_server() -> None:
+    """Start loopback callback server when redirect URI port differs from the main app port."""
+    if uses_integrated_oauth_callback():
+        return
+
     global _callback_server, _callback_thread
     with _server_lock:
         if _callback_thread is not None and _callback_thread.is_alive():
             return
 
         settings = get_settings()
-        host, port = "127.0.0.1", settings.chatgpt_oauth_callback_port
+        host, port = "127.0.0.1", oauth_redirect_port()
 
         def run() -> None:
             global _callback_server

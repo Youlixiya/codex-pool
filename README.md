@@ -133,7 +133,7 @@ Copy from [`.env.example`](./.env.example). Do not commit `.env`.
 | Variable | Description |
 |----------|-------------|
 | `JWT_SECRET` | Signs admin session tokens |
-| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Bootstrap admin (created on first start) |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Bootstrap admin; synced to the database on each start |
 | `CORS_ORIGINS` | Allowed origins for the admin UI |
 | `DATABASE_URL` | Optional; default `~/.codex-pool/codex_pool.db` |
 | `BILLING_*` | Per-million-token prices; usage and cost tracking |

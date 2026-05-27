@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from ...domain.schemas import (
@@ -15,6 +15,7 @@ from ...domain.schemas import (
 from ...repositories.upstream_repository import UpstreamRepository
 from ...services.chatgpt_usage import fetch_chatgpt_quota, quota_to_schema
 from ...services.upstream_service import UpstreamService
+from ...infrastructure.settings import get_settings
 from ...services.upstream_test import test_openai_upstream
 from ..deps import get_current_user_id, get_session
 
@@ -53,6 +54,7 @@ def update_upstream(
 
 @router.post("/{upstream_id}/test", response_model=UpstreamTestOut)
 def test_upstream_connection(
+    request: Request,
     upstream_id: int,
     user_id: Annotated[int, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)],
@@ -66,7 +68,17 @@ def test_upstream_connection(
         raise HTTPException(400, "未配置 Base URL")
     if not row.api_key:
         raise HTTPException(400, "未配置 API Key")
-    result = test_openai_upstream(base_url=row.base_url, api_key=row.api_key)
+    settings = get_settings()
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    public = (settings.public_base_url or "").strip() or settings.infer_public_base_url(
+        host=host,
+        forwarded_proto=request.headers.get("x-forwarded-proto"),
+    )
+    result = test_openai_upstream(
+        base_url=row.base_url,
+        api_key=row.api_key,
+        public_base_url=public or None,
+    )
     return UpstreamTestOut(**result)
 
 

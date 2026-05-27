@@ -246,6 +246,17 @@
             </div>
             <p v-if="!form.name.trim()" class="oauth-hint">请先填写名称再授权</p>
             <p v-else class="oauth-hint">将在新窗口打开 OpenAI 登录页，完成后自动回填凭证路径</p>
+            <el-alert
+              v-if="oauthRemoteSetup"
+              type="warning"
+              :closable="false"
+              show-icon
+              class="oauth-remote-alert"
+              :title="oauthRemoteSetup.message"
+            >
+              <p class="oauth-tunnel-label">在本机终端执行端口转发后，再点击「打开网页授权」：</p>
+              <code class="oauth-tunnel-cmd">{{ oauthRemoteSetup.ssh_tunnel_command }}</code>
+            </el-alert>
           </el-form-item>
 
           <el-form-item v-if="form.auth_file" label="剩余额度">
@@ -311,6 +322,7 @@ const saving = ref(false);
 const oauthLoading = ref(false);
 const oauthAuthorized = ref(false);
 const oauthEmail = ref("");
+const oauthRemoteSetup = ref(null);
 const dialogQuota = ref(null);
 const quotaLoading = ref(false);
 const quotaError = ref("");
@@ -343,6 +355,7 @@ function resetOAuth() {
   oauthLoading.value = false;
   oauthSessionId = null;
   oauthEmail.value = "";
+  oauthRemoteSetup.value = null;
   if (!form.auth_file) {
     oauthAuthorized.value = false;
   }
@@ -468,6 +481,10 @@ async function startOAuth() {
   try {
     const { data } = await startChatgptOAuth({ upstream_name: form.name.trim() });
     oauthSessionId = data.session_id;
+    oauthRemoteSetup.value = data.remote_setup || null;
+    if (data.remote_setup) {
+      ElMessage.warning("远程访问需先配置 SSH 端口转发，见下方说明");
+    }
     oauthPopup = window.open(data.authorization_url, "chatgpt-oauth", "width=520,height=720");
     if (!oauthPopup) {
       ElMessage.warning("请允许弹窗，或复制链接在浏览器打开：" + data.authorization_url);
@@ -1019,6 +1036,26 @@ onUnmounted(() => {
   margin: 8px 0 0;
   font-size: 12px;
   color: var(--cp-text-muted);
+}
+
+.oauth-remote-alert {
+  margin-top: 12px;
+}
+
+.oauth-tunnel-label {
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+
+.oauth-tunnel-cmd {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: "Fira Code", monospace;
+  font-size: 12px;
+  word-break: break-all;
 }
 
 .quota-toolbar {

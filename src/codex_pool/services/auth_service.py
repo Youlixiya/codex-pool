@@ -21,10 +21,29 @@ class AuthService:
         self._users = UserRepository(session)
 
     def ensure_admin(self) -> None:
+        """Create or sync the bootstrap admin from ADMIN_USERNAME / ADMIN_PASSWORD."""
         settings = get_settings()
-        if self._users.get_by_username(settings.admin_username):
+        username = settings.admin_username
+        password = settings.admin_password
+
+        user = self._users.get_by_username(username)
+        if user:
+            if not verify_password(password, user.password_hash):
+                self._users.update(user.id, password_hash=hash_password(password))
             return
-        self._users.create(settings.admin_username, hash_password(settings.admin_password))
+
+        bootstrap = self._users.get_by_id(1)
+        if bootstrap is not None and not self._users.get_by_username(username):
+            updates: dict[str, object] = {}
+            if bootstrap.username != username:
+                updates["username"] = username
+            if not verify_password(password, bootstrap.password_hash):
+                updates["password_hash"] = hash_password(password)
+            if updates:
+                self._users.update(bootstrap.id, **updates)
+            return
+
+        self._users.create(username, hash_password(password))
 
     def register(self, payload: RegisterRequest) -> TokenResponse:
         username = payload.username.strip()

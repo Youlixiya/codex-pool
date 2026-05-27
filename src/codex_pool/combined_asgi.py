@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException
 from starlette.responses import Response
@@ -20,7 +20,12 @@ from .api.controllers import (
     upstream_controller,
     upstream_oauth_controller,
 )
-from .services.chatgpt_oauth import ensure_callback_server, stop_callback_server
+from .services.chatgpt_oauth import (
+    ensure_callback_server,
+    oauth_callback_path,
+    register_oauth_callback_routes,
+    stop_callback_server,
+)
 from .infrastructure.database import get_engine, init_db, session_scope
 from .infrastructure.schema_migrations import ensure_user_profile_schema
 from .infrastructure.settings import get_settings
@@ -52,6 +57,8 @@ def _is_proxy_path(path: str) -> bool:
 
 
 def _is_admin_path(path: str) -> bool:
+    if path == oauth_callback_path():
+        return True
     return path.startswith(_ADMIN_PREFIX) or path in _ADMIN_PATHS or path.startswith("/docs/")
 
 
@@ -76,7 +83,7 @@ class SPAStaticFiles(StaticFiles):
 def _create_admin_api() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="Codex Pool", version="0.1.0")
-    origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+    origins = settings.resolved_cors_origins()
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins or ["*"],
@@ -89,6 +96,9 @@ def _create_admin_api() -> FastAPI:
     app.include_router(api_key_controller.router, prefix=_ADMIN_PREFIX)
     app.include_router(upstream_controller.router, prefix=_ADMIN_PREFIX)
     app.include_router(upstream_oauth_controller.router, prefix=_ADMIN_PREFIX)
+    oauth_router = APIRouter()
+    register_oauth_callback_routes(oauth_router)
+    app.include_router(oauth_router)
 
     @app.get("/healthz")
     def healthz():
