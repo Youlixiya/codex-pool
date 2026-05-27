@@ -90,7 +90,6 @@ def _build_client() -> httpx.AsyncClient:
 
 
 async def _send_upstream(
-    client: httpx.AsyncClient,
     *,
     upstream_name: str,
     method: str,
@@ -98,10 +97,12 @@ async def _send_upstream(
     headers: dict[str, str],
     body: bytes | None,
     stream: bool,
-) -> httpx.Response:
+) -> tuple[httpx.Response, httpx.AsyncClient]:
+    """Send to upstream with transient-error retries. Returns (response, client owning the stream)."""
     settings = get_settings()
     max_attempts = max(1, settings.proxy_upstream_max_retries)
     backoff = max(0.0, settings.proxy_upstream_retry_backoff_seconds)
+    client = _build_client()
     last_exc: httpx.HTTPError | None = None
 
     for attempt in range(max_attempts):
@@ -112,14 +113,23 @@ async def _send_upstream(
                 headers=headers,
                 content=body if body else None,
             )
-            return await client.send(req, stream=stream)
+            resp = await client.send(req, stream=stream)
+            if attempt > 0:
+                logger.info(
+                    "%s: upstream ok on attempt %d/%d",
+                    upstream_name,
+                    attempt + 1,
+                    max_attempts,
+                )
+            return resp, client
         except httpx.HTTPError as exc:
             last_exc = exc
+            await client.aclose()
             if attempt + 1 >= max_attempts or not is_transient_upstream_error(exc):
                 raise
             delay = backoff * (2**attempt)
             logger.warning(
-                "%s: %s (retry %d/%d in %.1fs)",
+                "%s: %s — attempt %d/%d failed, retrying in %.1fs (new connection)",
                 upstream_name,
                 exc,
                 attempt + 1,
@@ -127,6 +137,7 @@ async def _send_upstream(
                 delay,
             )
             await asyncio.sleep(delay)
+            client = _build_client()
 
     assert last_exc is not None
     raise last_exc
@@ -149,94 +160,91 @@ async def forward_request(
     record_usage = should_record_usage(request.url.path)
     model = parse_model_from_request(body) if record_usage else None
 
-    client = _build_client()
-    try:
-        for upstream in selector.order():
-            url = target_url(upstream, path)
-            try:
-                auth = upstream_authorization(upstream)
-            except (RuntimeError, ValueError) as exc:
-                msg = f"{upstream.name}: {exc}"
-                logger.warning(msg)
-                errors.append(msg)
-                continue
+    for upstream in selector.order():
+        url = target_url(upstream, path)
+        try:
+            auth = upstream_authorization(upstream)
+        except (RuntimeError, ValueError) as exc:
+            msg = f"{upstream.name}: {exc}"
+            logger.warning(msg)
+            errors.append(msg)
+            continue
 
-            headers = filter_request_headers(request.scope["headers"])
-            headers["authorization"] = auth
+        headers = filter_request_headers(request.scope["headers"])
+        headers["authorization"] = auth
 
-            try:
-                resp = await _send_upstream(
+        client: httpx.AsyncClient | None = None
+        try:
+            resp, client = await _send_upstream(
+                upstream_name=upstream.name,
+                method=request.method,
+                url=url,
+                headers=headers,
+                body=body if body else None,
+                stream=stream,
+            )
+        except httpx.HTTPError as exc:
+            msg = f"{upstream.name}: {exc} (gave up after {get_settings().proxy_upstream_max_retries} attempts)"
+            logger.warning(msg)
+            errors.append(msg)
+            continue
+
+        if selector.is_retryable(resp.status_code):
+            detail = await _peek_error(resp)
+            msg = f"{upstream.name}: HTTP {resp.status_code} {detail}"
+            logger.warning(msg)
+            errors.append(msg)
+            await resp.aclose()
+            if client is not None:
+                await client.aclose()
+            continue
+
+        if stream:
+            return StreamingResponse(
+                _stream_chunks(
+                    resp,
                     client,
+                    model,
+                    record_usage and resp.status_code == 200,
+                    db_store=db_store,
+                    raw_api_key=raw_api_key,
                     upstream_name=upstream.name,
-                    method=request.method,
-                    url=url,
-                    headers=headers,
-                    body=body if body else None,
-                    stream=stream,
-                )
-            except httpx.HTTPError as exc:
-                msg = f"{upstream.name}: {exc}"
-                logger.warning(msg)
-                errors.append(msg)
-                continue
-
-            if selector.is_retryable(resp.status_code):
-                detail = await _peek_error(resp)
-                msg = f"{upstream.name}: HTTP {resp.status_code} {detail}"
-                logger.warning(msg)
-                errors.append(msg)
-                await resp.aclose()
-                continue
-
-            if stream:
-                return StreamingResponse(
-                    _stream_chunks(
-                        resp,
-                        client,
-                        model,
-                        record_usage and resp.status_code == 200,
-                        db_store=db_store,
-                        raw_api_key=raw_api_key,
-                        upstream_name=upstream.name,
-                        path=request.url.path,
-                        status_code=resp.status_code,
-                    ),
+                    path=request.url.path,
                     status_code=resp.status_code,
-                    headers=filter_response_headers(resp.headers),
-                    media_type=stream_media_type(resp.headers),
-                )
-
-            try:
-                content = await resp.aread()
-            finally:
-                await resp.aclose()
-
-            if resp.status_code == 200:
-                usage = extract_usage_from_json(content)
-                if usage:
-                    db_store.log_usage(
-                        raw_key=raw_api_key,
-                        upstream_name=upstream.name,
-                        model=model,
-                        usage=usage,
-                        status_code=resp.status_code,
-                        path=request.url.path,
-                    )
-                elif record_usage:
-                    logger.debug("billing: no usage in non-stream response")
-
-            await client.aclose()
-            return Response(
-                content=content,
+                ),
                 status_code=resp.status_code,
                 headers=filter_response_headers(resp.headers),
-                media_type=resp.headers.get("content-type"),
+                media_type=stream_media_type(resp.headers),
             )
-    except Exception:
-        await client.aclose()
-        raise
 
-    await client.aclose()
+        try:
+            content = await resp.aread()
+        finally:
+            await resp.aclose()
+            if client is not None:
+                await client.aclose()
+
+        if resp.status_code == 200:
+            usage = extract_usage_from_json(content)
+            if usage:
+                db_store.log_usage(
+                    raw_key=raw_api_key,
+                    upstream_name=upstream.name,
+                    model=model,
+                    usage=usage,
+                    status_code=resp.status_code,
+                    path=request.url.path,
+                )
+            elif record_usage:
+                logger.debug("billing: no usage in non-stream response")
+
+        return Response(
+            content=content,
+            status_code=resp.status_code,
+            headers=filter_response_headers(resp.headers),
+            media_type=resp.headers.get("content-type"),
+        )
+
     return JSONResponse(
         {"error": "all upstreams failed", "details": errors},
         status_code=503,
