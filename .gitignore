@@ -2,10 +2,9 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-dist/
-build/
+/dist/
+/build/
 node_modules/
-web/dist/
 web/node_modules/
 .codegraph/
 .codex/

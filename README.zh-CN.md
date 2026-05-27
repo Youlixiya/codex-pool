@@ -31,14 +31,14 @@
 
 | 路径 | 说明 |
 |------|------|
-| `/` | Vue 管理台（需 `web/dist`） |
+| `/` | Vue 管理台（仓库内已包含 `web/dist`） |
 | `/api/v1/*` | 登录、上游、Key、仪表盘 |
 | `/v1/*` | Codex CLI 代理 |
 | `/healthz` | 健康检查 |
 
 ## 快速开始
 
-环境：**Python 3.12+**、[uv](https://github.com/astral-sh/uv)、**Node.js 18+**（仅构建前端时需要）。
+环境：**Python 3.12+**、[uv](https://github.com/astral-sh/uv)。管理台前端已预构建在 `web/dist`，**克隆后即可运行，无需 Node.js**。
 
 ```bash
 git clone https://github.com/Youlixiya/codex-pool.git
@@ -48,18 +48,18 @@ uv sync
 cp .env.example .env
 # 修改 JWT_SECRET、ADMIN_PASSWORD、CORS_ORIGINS
 
-cd web && npm install && npm run build && cd ..
-
 uv run codex-pool-admin --reload --port 8790
 ```
 
 浏览器打开 **http://127.0.0.1:8790**，使用 `.env` 中的管理员登录，或通过 **注册** 创建账号。
 
-### 前端热更新（可选）
+### 前端开发（可选）
+
+修改 `web/` 后需在 `web/` 目录执行 `npm run build`，并将 `web/dist` 一并提交。开发热更新需 **Node.js 18+**：
 
 ```bash
 uv run codex-pool-admin --reload --port 8790
-cd web && npm run dev   # http://127.0.0.1:5173，API 代理到 8790
+cd web && npm install && npm run dev   # http://127.0.0.1:5173，API 代理到 8790
 ```
 
 ## Codex CLI 配置
@@ -97,8 +97,6 @@ wire_api = "responses"
 git clone https://github.com/Youlixiya/codex-pool.git && cd codex-pool
 uv sync && cp .env.example .env
 # 编辑 JWT_SECRET、CORS_ORIGINS=http://你的域名
-
-cd web && npm install && npm run build && cd ..
 
 uv run codex-pool-admin --host 0.0.0.0 --port 8790 --log-level info
 ```

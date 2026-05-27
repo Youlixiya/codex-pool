@@ -37,14 +37,14 @@ Ideal for individuals and small teams who want a lightweight account pool withou
 
 | Path | Purpose |
 |------|---------|
-| `/` | Vue admin (requires `web/dist`) |
+| `/` | Vue admin (bundled in `web/dist`) |
 | `/api/v1/*` | Auth, upstreams, API keys, dashboard |
 | `/v1/*` | Codex CLI proxy (OpenAI-compatible) |
 | `/healthz` | Health check |
 
 ## Quick start
 
-**Requirements:** Python 3.12+, [uv](https://github.com/astral-sh/uv), Node.js 18+ (build frontend once).
+**Requirements:** Python 3.12+ and [uv](https://github.com/astral-sh/uv). The admin UI is pre-built in `web/dist` — no Node.js needed to run.
 
 ```bash
 git clone https://github.com/Youlixiya/codex-pool.git
@@ -54,21 +54,21 @@ uv sync
 cp .env.example .env
 # Edit JWT_SECRET, ADMIN_PASSWORD, CORS_ORIGINS
 
-cd web && npm install && npm run build && cd ..
-
 uv run codex-pool-admin --reload --port 8790
 ```
 
 Open **http://127.0.0.1:8790** — sign in with the admin account from `.env`, or **Register** a new user.
 
-### Frontend dev (optional)
+### Frontend development (optional)
+
+Requires Node.js 18+. After changing `web/`, run `npm run build` in `web/` and commit `web/dist` if you want the bundled UI updated.
 
 ```bash
 # Terminal 1
 uv run codex-pool-admin --reload --port 8790
 
 # Terminal 2 — Vite HMR, proxies /api and /v1 to 8790
-cd web && npm run dev
+cd web && npm install && npm run dev
 ```
 
 Visit **http://127.0.0.1:5173** for hot reload.
@@ -118,8 +118,6 @@ git clone https://github.com/Youlixiya/codex-pool.git && cd codex-pool
 uv sync
 cp .env.example .env
 # Set JWT_SECRET, ADMIN_PASSWORD, CORS_ORIGINS=https://your-domain
-
-cd web && npm install && npm run build && cd ..
 
 uv run codex-pool-admin --host 0.0.0.0 --port 8790 --log-level info
 ```
