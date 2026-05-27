@@ -19,6 +19,7 @@ import httpx
 from fastapi import APIRouter, Request
 from starlette.responses import HTMLResponse
 
+from ..infrastructure.http_client import build_client
 from ..infrastructure.oauth_store import (
     bind_state,
     load_session,
@@ -121,7 +122,7 @@ def _write_auth_file(path: Path, token_payload: dict[str, Any]) -> None:
 
 def _exchange_code(code: str, code_verifier: str) -> dict[str, Any]:
     settings = get_settings()
-    with httpx.Client(timeout=30.0) as client:
+    with build_client(timeout=30.0) as client:
         resp = client.post(
             settings.chatgpt_oauth_token_url,
             data={

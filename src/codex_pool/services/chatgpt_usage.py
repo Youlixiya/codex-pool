@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 
 from ..infrastructure.settings import get_settings
+from ..infrastructure.http_client import build_client
 from .chatgpt_credentials import ChatgptCredentials, load_chatgpt_credentials
 
 logger = logging.getLogger(__name__)
@@ -186,7 +187,7 @@ def _request_usage(creds: ChatgptCredentials) -> dict[str, Any]:
     if creds.account_id:
         headers["chatgpt-account-id"] = creds.account_id
 
-    with httpx.Client(timeout=30.0) as client:
+    with build_client(timeout=30.0) as client:
         resp = client.get(settings.chatgpt_usage_url, headers=headers)
 
     if resp.status_code >= 400:

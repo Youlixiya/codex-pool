@@ -26,14 +26,53 @@ def _extract_bearer(request: Request) -> str | None:
     return auth[7:].strip()
 
 
+def _client_ip(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",", 1)[0].strip()
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    if request.client:
+        return request.client.host
+    return "unknown"
+
+
+def _key_hint(raw: str) -> str:
+    if not raw:
+        return ""
+    if raw.startswith("sk-cp-"):
+        return raw[:12] + "..."
+    # Avoid logging secrets; only a short hash prefix.
+    import hashlib
+
+    return "sha256:" + hashlib.sha256(raw.encode()).hexdigest()[:10]
+
+
 def _check_auth(request: Request) -> JSONResponse | None:
+    auth = request.headers.get("authorization") or ""
     raw = _extract_bearer(request)
     if not raw:
+        reason = "missing_authorization" if not auth else "non_bearer_authorization"
+        logger.info(
+            "proxy unauthorized (%s) ip=%s method=%s path=%s",
+            reason,
+            _client_ip(request),
+            request.method,
+            request.url.path,
+        )
         return JSONResponse({"error": "unauthorized"}, status_code=401)
 
     db_store: DbStore = request.app.state.db_store
     record = db_store.lookup_api_key(raw)
     if not record:
+        logger.info(
+            "proxy unauthorized (unknown_key) ip=%s method=%s path=%s key=%s",
+            _client_ip(request),
+            request.method,
+            request.url.path,
+            _key_hint(raw),
+        )
         return JSONResponse({"error": "unauthorized"}, status_code=401)
     request.state.api_key = raw
     request.state.api_key_record = record

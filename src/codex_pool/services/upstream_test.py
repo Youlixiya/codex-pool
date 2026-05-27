@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 import httpx
 
 from ..infrastructure.settings import get_settings
+from ..infrastructure.http_client import build_client
 
 
 def _loopback_test_base_url(base_url: str, *, public_base_url: str | None = None) -> str:
@@ -45,7 +46,7 @@ def test_openai_upstream(
     url = effective.rstrip("/") + "/models"
     started = time.perf_counter()
     try:
-        with httpx.Client(timeout=15.0, follow_redirects=True) as client:
+        with build_client(timeout=15.0, follow_redirects=True) as client:
             resp = client.get(url, headers={"Authorization": f"Bearer {api_key}"})
     except httpx.TimeoutException:
         return {"ok": False, "message": "连接超时，请检查 Base URL 或网络", "latency_ms": None}

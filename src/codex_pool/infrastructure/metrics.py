@@ -18,6 +18,7 @@ def _maybe_reset_window(now: float) -> None:
 
 
 def incr_realtime_metrics(input_tokens: int, output_tokens: int) -> None:
+    global _rpm, _tpm
     with _lock:
         now = time.time()
         _maybe_reset_window(now)

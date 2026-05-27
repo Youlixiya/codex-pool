@@ -7,6 +7,7 @@ import httpx
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 
+from ..infrastructure.http_client import build_async_client
 from .billing import (
     extract_usage_from_json,
     extract_usage_from_sse,
@@ -40,7 +41,7 @@ def is_streaming_body(body: bytes) -> bool:
 
 
 def _build_client() -> httpx.AsyncClient:
-    return httpx.AsyncClient(
+    return build_async_client(
         timeout=TIMEOUT,
         follow_redirects=True,
         http2=False,
