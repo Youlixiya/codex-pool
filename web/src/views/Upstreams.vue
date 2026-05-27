@@ -259,6 +259,26 @@
             </el-alert>
           </el-form-item>
 
+          <el-form-item label="从 auth.json 内容导入（推荐，免端口转发）">
+            <el-input
+              v-model="form.auth_json"
+              type="textarea"
+              :rows="6"
+              placeholder="粘贴 auth.json 的完整内容（JSON），将写入服务器 ~/.codex-pool/auth/ 并自动回填 Auth 文件路径"
+            />
+            <div style="margin-top: 10px; display: flex; gap: 10px; justify-content: flex-end">
+              <el-button
+                type="primary"
+                plain
+                :loading="authJsonImporting"
+                :disabled="!form.name.trim() || !form.auth_json.trim()"
+                @click="importAuthJson"
+              >
+                导入并校验
+              </el-button>
+            </div>
+          </el-form-item>
+
           <el-form-item v-if="form.auth_file" label="剩余额度">
             <div class="quota-toolbar">
               <ChatgptQuotaPanel :quota="dialogQuota" :loading="quotaLoading" :error="quotaError" />
@@ -307,6 +327,7 @@ import {
   createUpstream,
   deleteUpstream,
   listUpstreams,
+  importChatgptAuthJson,
   startChatgptOAuth,
   getChatgptOAuthStatus,
   getChatgptQuota,
@@ -328,6 +349,7 @@ const quotaLoading = ref(false);
 const quotaError = ref("");
 const rowQuota = reactive({});
 const rowTesting = reactive({});
+const authJsonImporting = ref(false);
 let oauthSessionId = null;
 let oauthPollTimer = null;
 let oauthPopup = null;
@@ -346,6 +368,7 @@ const form = reactive({
   base_url: "",
   api_key: "",
   auth_file: "",
+  auth_json: "",
   priority: 1,
   enabled: true,
 });
@@ -370,6 +393,7 @@ function resetQuota() {
 function onDialogClosed() {
   resetOAuth();
   resetQuota();
+  form.auth_json = "";
 }
 
 function stopOAuthPoll() {
@@ -501,6 +525,35 @@ function onTypeChange() {
   if (form.type === "openai") {
     resetOAuth();
     resetQuota();
+    form.auth_json = "";
+  }
+}
+
+async function importAuthJson() {
+  if (!form.name.trim()) {
+    ElMessage.warning("请先填写上游名称");
+    return;
+  }
+  if (!form.auth_json.trim()) {
+    ElMessage.warning("请粘贴 auth.json 内容");
+    return;
+  }
+  authJsonImporting.value = true;
+  try {
+    const { data } = await importChatgptAuthJson({
+      upstream_name: form.name.trim(),
+      auth_json: form.auth_json.trim(),
+    });
+    form.auth_file = data.auth_file || form.auth_file;
+    oauthAuthorized.value = true;
+    oauthEmail.value = data.email || oauthEmail.value;
+    if (data.quota) dialogQuota.value = data.quota;
+    ElMessage.success("已导入并校验 auth.json");
+  } catch (err) {
+    const msg = err.response?.data?.detail || err.message || "导入失败";
+    ElMessage.error(typeof msg === "string" ? msg : "导入失败");
+  } finally {
+    authJsonImporting.value = false;
   }
 }
 

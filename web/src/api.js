@@ -44,5 +44,7 @@ export const getChatgptOAuthStatus = (sessionId) =>
   api.get(`/upstreams/oauth/chatgpt/status/${sessionId}`);
 export const getChatgptQuota = (authFile) =>
   api.get("/upstreams/oauth/chatgpt/quota", { params: { auth_file: authFile } });
+export const importChatgptAuthJson = (data) =>
+  api.post("/upstreams/oauth/chatgpt/import", data);
 export const getUpstreamQuota = (id) => api.get(`/upstreams/${id}/quota`);
 export const testUpstreamConnection = (id) => api.post(`/upstreams/${id}/test`);
