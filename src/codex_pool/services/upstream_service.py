@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from ..domain.schemas import UpstreamCreate, UpstreamOut, UpstreamUpdate
-from ..infrastructure.redis_client import publish_config_reload
+from ..infrastructure.config_reload import publish_config_reload
 from ..repositories.upstream_repository import UpstreamRepository
 
 

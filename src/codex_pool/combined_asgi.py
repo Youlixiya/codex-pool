@@ -22,7 +22,7 @@ from .api.controllers import (
 )
 from .services.chatgpt_oauth import ensure_callback_server, stop_callback_server
 from .infrastructure.database import get_engine, init_db, session_scope
-from .infrastructure.schema_migrations import ensure_upstream_user_schema, ensure_user_profile_schema
+from .infrastructure.schema_migrations import ensure_user_profile_schema
 from .infrastructure.settings import get_settings
 from .proxy.bootstrap import build_proxy_app
 from .services.auth_service import AuthService
@@ -119,16 +119,15 @@ class CombinedASGI:
     async def _lifespan(self):
         init_db()
         ensure_user_profile_schema(get_engine())
-        ensure_upstream_user_schema(get_engine())
         with session_scope() as session:
             AuthService(session).ensure_admin()
         if self.enable_proxy:
             self._proxy = build_proxy_app()
-            upstreams = len(self._proxy.state.config.upstreams)
+            config = self._proxy.state.db_store.reload()
             logger.info(
                 "codex proxy ready (%d upstreams, strategy=%s)",
-                upstreams,
-                self._proxy.state.config.strategy,
+                len(config.upstreams) if config else 0,
+                config.strategy if config else "failover",
             )
         if self.web_dist is not None:
             logger.info("serving web UI from %s", self.web_dist)

@@ -17,13 +17,17 @@ from urllib.parse import parse_qs, urlencode, urlparse
 
 import httpx
 
-from ..infrastructure.redis_client import get_redis
+from ..infrastructure.oauth_store import (
+    bind_state,
+    load_session,
+    save_session,
+    session_id_for_state,
+)
 from ..infrastructure.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
 _SESSION_TTL = 600
-_REDIS_PREFIX = "codex-pool:oauth:chatgpt:"
 
 
 @dataclass(frozen=True)
@@ -61,23 +65,12 @@ def _auth_dir() -> Path:
     return path
 
 
-def _session_key(session_id: str) -> str:
-    return f"{_REDIS_PREFIX}session:{session_id}"
-
-
-def _state_key(state: str) -> str:
-    return f"{_REDIS_PREFIX}state:{state}"
-
-
 def _load_session(session_id: str) -> dict[str, Any] | None:
-    raw = get_redis().get(_session_key(session_id))
-    if not raw:
-        return None
-    return json.loads(raw)
+    return load_session(session_id)
 
 
 def _save_session(session_id: str, data: dict[str, Any]) -> None:
-    get_redis().setex(_session_key(session_id), _SESSION_TTL, json.dumps(data))
+    save_session(session_id, data, ttl=_SESSION_TTL)
 
 
 def _decode_jwt_email(id_token: str | None) -> str | None:
@@ -165,8 +158,7 @@ def start_oauth_session(*, user_id: int, upstream_name: str | None = None) -> OA
         "error": None,
         "created_at": time.time(),
     }
-    r = get_redis()
-    r.setex(_state_key(state), _SESSION_TTL, session_id)
+    bind_state(state, session_id, ttl=_SESSION_TTL)
     _save_session(session_id, data)
 
     url = _build_authorization_url(state=state, code_challenge=code_challenge)
@@ -207,7 +199,7 @@ def _handle_oauth_callback(query: dict[str, list[str]]) -> None:
         desc = (query.get("error_description") or [""])[0]
         logger.warning("oauth callback error: %s %s", err, desc)
         if state_list:
-            sid = get_redis().get(_state_key(state_list[0]))
+            sid = session_id_for_state(state_list[0])
             if sid:
                 _complete_session(sid, status="failed", error=desc or err)
         return
@@ -219,8 +211,7 @@ def _handle_oauth_callback(query: dict[str, list[str]]) -> None:
     state = state_list[0]
     code = code_list[0]
 
-    r = get_redis()
-    session_id = r.get(_state_key(state))
+    session_id = session_id_for_state(state)
     if not session_id:
         logger.warning("oauth callback unknown state")
         return

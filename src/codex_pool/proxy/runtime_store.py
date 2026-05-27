@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os
 import threading
 from dataclasses import dataclass
 from decimal import Decimal
@@ -10,7 +9,10 @@ from decimal import Decimal
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from .billing import BillingConfig, ModelPrice, cost_usd
+from ..infrastructure.database import _engine_kwargs, _expand_sqlite_url
+from ..infrastructure.metrics import incr_realtime_metrics
+from ..infrastructure.settings import get_settings
+from .billing import cost_usd, load_billing_config
 from .config import AppConfig, Upstream
 
 logger = logging.getLogger(__name__)
@@ -26,19 +28,14 @@ class ApiKeyRecord:
 
 class DbStore:
     def __init__(self, database_url: str) -> None:
-        self._engine = create_engine(database_url, pool_pre_ping=True, pool_recycle=3600)
+        url = _expand_sqlite_url(database_url)
+        self._engine = create_engine(url, **_engine_kwargs(url))
         self._session_factory = sessionmaker(bind=self._engine)
         self._lock = threading.Lock()
         self._api_keys: dict[str, ApiKeyRecord] = {}
         self._upstreams_by_user: dict[int, list[Upstream]] = {}
         self._strategy = "failover"
-        self._billing = BillingConfig(
-            enabled=True,
-            budget_usd=50.0,
-            state_path=__import__("pathlib").Path("~/.codex-pool/usage.json").expanduser(),
-            default_price=ModelPrice(5.0, 30.0, 0.5),
-            model_prices={},
-        )
+        self._billing = load_billing_config()
 
     def reload(self) -> AppConfig | None:
         with self._lock:
@@ -56,7 +53,6 @@ class DbStore:
                 logger.warning("no upstreams in database")
             total_upstreams = sum(len(v) for v in self._upstreams_by_user.values())
             return AppConfig(
-                pool_api_key="db-managed-keys",
                 strategy=self._strategy,
                 upstreams=[u for ups in self._upstreams_by_user.values() for u in ups],
             )
@@ -69,17 +65,10 @@ class DbStore:
                 return record
             return None
 
-    def verify_api_key(self, raw_key: str) -> bool:
-        return self.lookup_api_key(raw_key) is not None
-
     def config_for_user(self, user_id: int) -> AppConfig:
         with self._lock:
             upstreams = list(self._upstreams_by_user.get(user_id, []))
-            return AppConfig(
-                pool_api_key="db-managed-keys",
-                strategy=self._strategy,
-                upstreams=upstreams,
-            )
+            return AppConfig(strategy=self._strategy, upstreams=upstreams)
 
     def log_usage(
         self,
@@ -131,21 +120,7 @@ class DbStore:
                         },
                     )
                     session.commit()
-                try:
-                    import redis
-
-                    r = redis.Redis.from_url(
-                        os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0"),
-                        decode_responses=True,
-                    )
-                    pipe = r.pipeline()
-                    pipe.incr("metrics:rpm:window")
-                    pipe.incrby("metrics:tpm:window", input_tokens + output_tokens)
-                    pipe.expire("metrics:rpm:window", 60)
-                    pipe.expire("metrics:tpm:window", 60)
-                    pipe.execute()
-                except Exception:
-                    pass
+                incr_realtime_metrics(input_tokens, output_tokens)
             except Exception as exc:
                 logger.warning("usage log write failed: %s", exc)
 
@@ -245,11 +220,8 @@ class DbStore:
 _db_store: DbStore | None = None
 
 
-def get_db_store() -> DbStore | None:
+def get_db_store() -> DbStore:
     global _db_store
-    url = os.environ.get("DATABASE_URL", "").strip()
-    if not url:
-        return None
     if _db_store is None:
-        _db_store = DbStore(url)
+        _db_store = DbStore(get_settings().resolved_database_url())
     return _db_store

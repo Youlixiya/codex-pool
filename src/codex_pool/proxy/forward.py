@@ -8,7 +8,6 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from .billing import (
-    UsageStore,
     extract_usage_from_json,
     extract_usage_from_sse,
     parse_model_from_request,
@@ -51,9 +50,8 @@ def _build_client() -> httpx.AsyncClient:
 async def forward_request(
     request: Request,
     config: AppConfig,
-    usage_store: UsageStore | None = None,
     *,
-    db_store: DbStore | None = None,
+    db_store: DbStore,
     raw_api_key: str | None = None,
 ) -> Response:
     body = await request.body()
@@ -63,9 +61,7 @@ async def forward_request(
     if request.url.query:
         path = f"{path}?{request.url.query}"
     errors: list[str] = []
-    record_usage = (usage_store is not None or db_store is not None) and should_record_usage(
-        request.url.path
-    )
+    record_usage = should_record_usage(request.url.path)
     model = parse_model_from_request(body) if record_usage else None
 
     client = _build_client()
@@ -106,12 +102,10 @@ async def forward_request(
                 continue
 
             if stream:
-                # Client must stay open until StreamingResponse finishes consuming resp.
                 return StreamingResponse(
                     _stream_chunks(
                         resp,
                         client,
-                        usage_store,
                         model,
                         record_usage and resp.status_code == 200,
                         db_store=db_store,
@@ -133,17 +127,14 @@ async def forward_request(
             if resp.status_code == 200:
                 usage = extract_usage_from_json(content)
                 if usage:
-                    if usage_store is not None:
-                        usage_store.record(model, usage)
-                    if db_store is not None:
-                        db_store.log_usage(
-                            raw_key=raw_api_key,
-                            upstream_name=upstream.name,
-                            model=model,
-                            usage=usage,
-                            status_code=resp.status_code,
-                            path=request.url.path,
-                        )
+                    db_store.log_usage(
+                        raw_key=raw_api_key,
+                        upstream_name=upstream.name,
+                        model=model,
+                        usage=usage,
+                        status_code=resp.status_code,
+                        path=request.url.path,
+                    )
                 elif record_usage:
                     logger.debug("billing: no usage in non-stream response")
 
@@ -176,11 +167,10 @@ async def _peek_error(resp: httpx.Response) -> str:
 async def _stream_chunks(
     resp: httpx.Response,
     client: httpx.AsyncClient,
-    usage_store: UsageStore | None,
     model: str | None,
     record: bool,
     *,
-    db_store: DbStore | None = None,
+    db_store: DbStore,
     raw_api_key: str | None = None,
     upstream_name: str = "",
     path: str = "",
@@ -202,16 +192,13 @@ async def _stream_chunks(
         if record and buffer:
             usage = extract_usage_from_sse(bytes(buffer))
             if usage:
-                if usage_store is not None:
-                    usage_store.record(model, usage)
-                if db_store is not None:
-                    db_store.log_usage(
-                        raw_key=raw_api_key,
-                        upstream_name=upstream_name,
-                        model=model,
-                        usage=usage,
-                        status_code=status_code,
-                        path=path,
-                    )
+                db_store.log_usage(
+                    raw_key=raw_api_key,
+                    upstream_name=upstream_name,
+                    model=model,
+                    usage=usage,
+                    status_code=status_code,
+                    path=path,
+                )
             else:
                 logger.debug("billing: no usage in stream response")

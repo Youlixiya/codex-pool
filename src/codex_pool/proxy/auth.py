@@ -9,15 +9,6 @@ logger = logging.getLogger(__name__)
 _token_cache: dict[Path, tuple[float, str]] = {}
 
 
-def verify_pool_key(authorization: str | None, expected: str) -> bool:
-    if not authorization:
-        return False
-    prefix = "Bearer "
-    if not authorization.startswith(prefix):
-        return False
-    return authorization[len(prefix) :].strip() == expected
-
-
 def _extract_access_token(data: object) -> str | None:
     if not isinstance(data, dict):
         return None

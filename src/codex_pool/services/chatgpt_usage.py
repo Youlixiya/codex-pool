@@ -3,13 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from ..infrastructure.redis_client import get_redis
 from ..infrastructure.settings import get_settings
 from .chatgpt_credentials import ChatgptCredentials, load_chatgpt_credentials
 
@@ -38,6 +39,27 @@ class ChatgptQuota:
     limit_reached: bool
     five_hour: QuotaWindow | None
     weekly: QuotaWindow | None
+
+
+_quota_cache: dict[str, tuple[ChatgptQuota, float]] = {}
+_quota_cache_lock = threading.Lock()
+
+
+def _get_cached_quota(cache_key: str) -> ChatgptQuota | None:
+    with _quota_cache_lock:
+        entry = _quota_cache.get(cache_key)
+        if not entry:
+            return None
+        quota, expires = entry
+        if time.time() >= expires:
+            _quota_cache.pop(cache_key, None)
+            return None
+        return quota
+
+
+def _set_cached_quota(cache_key: str, quota: ChatgptQuota) -> None:
+    with _quota_cache_lock:
+        _quota_cache[cache_key] = (quota, time.time() + _QUOTA_CACHE_TTL)
 
 
 def _window_label(seconds: int | None) -> str:
@@ -112,19 +134,16 @@ def fetch_chatgpt_quota(auth_file: str | Path, *, use_cache: bool = True) -> Cha
     cache_key = _cache_key(path)
 
     if use_cache:
-        cached = get_redis().get(cache_key)
-        if cached:
-            try:
-                return _quota_from_dict(json.loads(cached))
-            except (json.JSONDecodeError, TypeError, KeyError):
-                pass
+        cached = _get_cached_quota(cache_key)
+        if cached is not None:
+            return cached
 
     creds = load_chatgpt_credentials(path)
     payload = _request_usage(creds)
     quota = _parse_usage_payload(payload)
 
     if use_cache:
-        get_redis().setex(cache_key, _QUOTA_CACHE_TTL, json.dumps(_quota_to_dict(quota)))
+        _set_cached_quota(cache_key, quota)
 
     return quota
 

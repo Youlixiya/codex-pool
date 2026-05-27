@@ -31,10 +31,6 @@ def main() -> None:
     if env_path.is_file():
         load_dotenv(env_path)
 
-    if not args.no_proxy and not os.environ.get("DATABASE_URL", "").strip():
-        print("DATABASE_URL is required (configure upstreams & API keys in the web UI)", file=sys.stderr)
-        sys.exit(1)
-
     if args.no_proxy:
         os.environ["CODEX_POOL_NO_PROXY"] = "1"
     else:

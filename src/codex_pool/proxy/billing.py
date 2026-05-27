@@ -3,10 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-import threading
-import time
 from dataclasses import dataclass, field
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -28,17 +25,9 @@ class ModelPrice:
 
 @dataclass
 class BillingConfig:
-    enabled: bool
     budget_usd: float
-    state_path: Path
     default_price: ModelPrice
     model_prices: dict[str, ModelPrice] = field(default_factory=dict)
-
-
-def _parse_bool(value: str | None, default: bool = False) -> bool:
-    if value is None:
-        return default
-    return value.strip().lower() in ("1", "true", "yes", "on")
 
 
 def _parse_float(value: str | None, default: float) -> float:
@@ -78,14 +67,8 @@ def load_billing_config() -> BillingConfig:
                     ),
                 )
 
-    state_path = Path(
-        os.environ.get("BILLING_STATE_FILE", "~/.codex-pool/usage.json")
-    ).expanduser()
-
     return BillingConfig(
-        enabled=_parse_bool(os.environ.get("BILLING_STUB_ENABLED"), False),
         budget_usd=_parse_float(os.environ.get("BILLING_BUDGET_USD"), 50.0),
-        state_path=state_path,
         default_price=default_price,
         model_prices=model_prices,
     )
@@ -171,86 +154,6 @@ def extract_usage_from_sse(content: bytes) -> dict | None:
     return usage
 
 
-def is_credit_grants_path(path: str) -> bool:
-    path = path.split("?", 1)[0]
-    return path in (
-        "/v1/dashboard/billing/credit_grants",
-        "/dashboard/billing/credit_grants",
-    )
-
-
 def should_record_usage(path: str) -> bool:
     path = path.split("?", 1)[0]
     return path in ("/v1/responses", "/v1/responses/compact")
-
-
-class UsageStore:
-    def __init__(self, config: BillingConfig) -> None:
-        self._config = config
-        self._lock = threading.Lock()
-        self._total_used_usd: float = 0.0
-        self._request_count: int = 0
-        self._load()
-
-    def _load(self) -> None:
-        path = self._config.state_path
-        if not path.is_file():
-            return
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            logger.warning("billing state load failed: %s", exc)
-            return
-        self._total_used_usd = float(data.get("total_used_usd", 0.0))
-        self._request_count = int(data.get("request_count", 0))
-
-    def _save(self) -> None:
-        path = self._config.state_path
-        path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "total_used_usd": self._total_used_usd,
-            "total_granted_usd": self._config.budget_usd,
-            "request_count": self._request_count,
-            "updated_at": time.time(),
-        }
-        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-
-    def record(self, model: str | None, usage: dict) -> float:
-        delta = cost_usd(self._config, model, usage)
-        with self._lock:
-            self._total_used_usd += delta
-            self._request_count += 1
-            self._save()
-        logger.info(
-            "billing: model=%s cost=$%.6f total_used=$%.4f",
-            model or "unknown",
-            delta,
-            self._total_used_usd,
-        )
-        return delta
-
-    def credit_grants_payload(self) -> dict:
-        with self._lock:
-            granted = self._config.budget_usd
-            used = self._total_used_usd
-        available = max(0.0, granted - used)
-        now = time.time()
-        return {
-            "object": "credit_summary",
-            "total_granted": round(granted, 6),
-            "total_used": round(used, 6),
-            "total_available": round(available, 6),
-            "grants": {
-                "object": "list",
-                "data": [
-                    {
-                        "object": "credit_grant",
-                        "id": "codex-pool-simulated",
-                        "grant_amount": round(granted, 6),
-                        "used_amount": round(used, 6),
-                        "effective_at": now - 86400.0,
-                        "expires_at": now + 86400.0 * 365,
-                    }
-                ],
-            },
-        }

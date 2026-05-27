@@ -167,8 +167,3 @@ class UsageTrendPoint(BaseModel):
     input_tokens: int
     output_tokens: int
     cost_usd: Decimal
-
-
-class SettingsOut(BaseModel):
-    strategy: str
-    billing_budget_usd: Decimal

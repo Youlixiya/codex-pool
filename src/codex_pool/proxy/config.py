@@ -20,7 +20,6 @@ class Upstream:
 
 @dataclass
 class AppConfig:
-    pool_api_key: str
     strategy: Strategy
     upstreams: list[Upstream] = field(default_factory=list)
 

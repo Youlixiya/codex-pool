@@ -47,6 +47,7 @@ export default defineConfig({
     host: true,
     port: 5173,
     strictPort: true,
+    allowedHosts: [".cpolar.cn"],
     headers: {
       "Cache-Control": "no-store",
     },

@@ -5,7 +5,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from ..domain.schemas import DashboardStats, ModelUsageRow, PlatformUsageRow, UsageTrendPoint
-from ..infrastructure.redis_client import get_realtime_metrics
+from ..infrastructure.metrics import get_realtime_metrics
 from ..repositories.api_key_repository import ApiKeyRepository
 from ..repositories.usage_repository import UsageRepository
 from ..repositories.user_repository import UserRepository

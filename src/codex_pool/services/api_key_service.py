@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from ..domain.schemas import ApiKeyCreate, ApiKeyCreated, ApiKeyOut, ApiKeySecretOut, ApiKeyUpdate
-from ..infrastructure.redis_client import publish_config_reload
+from ..infrastructure.config_reload import publish_config_reload
 from ..infrastructure.security import api_key_prefix, generate_api_key, hash_api_key
 from ..repositories.api_key_repository import ApiKeyRepository
 

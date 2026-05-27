@@ -1,0 +1,20 @@
+# systemd unit example (Linux server)
+#   sudo cp scripts/codex-pool.service.example /etc/systemd/system/codex-pool.service
+#   sudo systemctl edit codex-pool   # set User, WorkingDirectory, EnvironmentFile
+#   sudo systemctl enable --now codex-pool
+
+[Unit]
+Description=Codex Pool (admin UI + API + proxy)
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+WorkingDirectory=/opt/codex-pool
+EnvironmentFile=/opt/codex-pool/.env
+ExecStart=/home/deploy/.local/bin/uv run codex-pool-admin --host 0.0.0.0 --port 8790 --log-level info
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

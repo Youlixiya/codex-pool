@@ -1,17 +1,29 @@
 [project]
 name = "codex-pool"
 version = "0.1.0"
-description = "Codex CLI proxy pool with web admin — upstream accounts and API keys via admin UI"
+description = "Self-hosted Codex CLI proxy pool with web admin — SQLite, multi-tenant upstreams, and /v1 forwarding on one port"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
+authors = [{ name = "Youlixiya" }]
+keywords = ["codex", "openai", "proxy", "cli", "sqlite", "fastapi"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
 dependencies = [
     "starlette>=0.46",
     "uvicorn[standard]>=0.34",
     "httpx>=0.28",
     "python-dotenv>=1.0",
     "sqlalchemy>=2.0",
-    "pymysql>=1.1",
-    "redis>=5.0",
     "fastapi>=0.115",
     "cryptography>=43.0",
     "python-jose[cryptography]>=3.3",
@@ -19,6 +31,12 @@ dependencies = [
     "pydantic-settings>=2.0",
     "python-multipart>=0.0.9",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Youlixiya/codex-pool"
+Repository = "https://github.com/Youlixiya/codex-pool"
+Issues = "https://github.com/Youlixiya/codex-pool/issues"
+Documentation = "https://github.com/Youlixiya/codex-pool#readme"
 
 [project.scripts]
 codex-pool-admin = "codex_pool.admin_cli:main"
@@ -29,3 +47,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/codex_pool"]
+
+[[tool.uv.index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true

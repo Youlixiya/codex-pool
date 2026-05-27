@@ -1,45 +1,92 @@
+<div align="center">
+
 # codex-pool
 
-本地 HTTP 代理 + Web 管理后台（**单端口**）：在网页配置上游账号并签发 API Key，Codex CLI 用同一地址的 `/v1` 自动路由 / 故障转移。
+**Self-hosted Codex CLI proxy pool with a web admin — one port for management, API, and `/v1` forwarding.**
 
-## 快速开始
+[中文文档](./README.zh-CN.md) · [Report a bug](https://github.com/Youlixiya/codex-pool/issues) · [Discussions](https://github.com/Youlixiya/codex-pool/discussions)
+
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+
+</div>
+
+---
+
+## Why codex-pool?
+
+[Codex CLI](https://github.com/openai/codex) talks to upstream models through a configurable `base_url`. **codex-pool** sits in the middle: you manage upstream accounts and API keys in a browser, while developers point Codex at a single local endpoint. The proxy handles **routing, failover, usage metering, and billing estimates** — backed by a single **SQLite** file, no Redis or MySQL required.
+
+Ideal for individuals and small teams who want a lightweight account pool without operating a full API gateway stack.
+
+## Features
+
+| Area | What you get |
+|------|----------------|
+| **Single process** | Admin UI, REST API, and OpenAI-compatible `/v1` proxy on one port |
+| **Multi-tenant** | Per-user registration, upstream pools, and API keys |
+| **Upstream pool** | Multiple accounts per user; automatic failover on errors |
+| **Usage & billing** | Token usage and cost estimates stored in SQLite (`BILLING_*`) |
+| **ChatGPT OAuth** | Browser-based upstream authorization (PKCE, same flow as Codex CLI) |
+| **Quota dashboard** | 5-hour / weekly limits from ChatGPT usage API |
+| **Zero ops deps** | SQLite + optional file-based OAuth store under `~/.codex-pool/` |
+| **Small VPS friendly** | Runs comfortably on 2 vCPU / 2 GB RAM |
+
+## Architecture
+
+```mermaid
+flowchart LR
+  CLI[Codex CLI] -->|Bearer sk-cp-*| Proxy["/v1 proxy"]
+  Browser[Admin UI] -->|JWT| API["/api/v1"]
+  Proxy --> Selector[Upstream selector]
+  Selector --> U1[Upstream A]
+  Selector --> U2[Upstream B]
+  API --> DB[(SQLite)]
+  Proxy --> DB
+```
+
+| Path | Purpose |
+|------|---------|
+| `/` | Vue admin (requires `web/dist`) |
+| `/api/v1/*` | Auth, upstreams, API keys, dashboard |
+| `/v1/*` | Codex CLI proxy (OpenAI-compatible) |
+| `/healthz` | Health check |
+
+## Quick start
+
+**Requirements:** Python 3.12+, [uv](https://github.com/astral-sh/uv), Node.js 18+ (build frontend once).
 
 ```bash
-uv sync
-docker compose up -d mysql redis
-cp .env.example .env
+git clone https://github.com/Youlixiya/codex-pool.git
+cd codex-pool
 
-# 构建前端（首次）
+uv sync
+cp .env.example .env
+# Edit JWT_SECRET, ADMIN_PASSWORD, CORS_ORIGINS
+
 cd web && npm install && npm run build && cd ..
 
-# 一条命令：管理后台 + API + Codex 代理
 uv run codex-pool-admin --reload --port 8790
 ```
 
-浏览器打开 **http://127.0.0.1:8790**（需已 `npm run build` 生成 `web/dist`）。
+Open **http://127.0.0.1:8790** — sign in with the admin account from `.env`, or **Register** a new user.
 
-### 前端开发（5173，可选）
+### Frontend dev (optional)
 
 ```bash
-# 终端 1：后端 + 已构建的静态资源（或仅 API）
+# Terminal 1
 uv run codex-pool-admin --reload --port 8790
 
-# 终端 2：Vite 热更新
+# Terminal 2 — Vite HMR, proxies /api and /v1 to 8790
 cd web && npm run dev
 ```
 
-浏览器打开 **http://127.0.0.1:5173**（`npm run dev` 会同时打印 **Network** 内网地址，如 `http://192.168.x.x:5173`）。不要混用 8790 的缓存页面；若 `/assets/*.js` 404，先 `npm run build` 或强制刷新。
+Visit **http://127.0.0.1:5173** for hot reload.
 
-内网其他设备访问 5173 时，本机仍需运行 `codex-pool-admin`（8790），代理才会通。
+## Codex CLI
 
-| 地址 | 用途 |
-|------|------|
-| **8790** | 生产式单端口（`web/dist` + API + 代理） |
-| **5173** | 仅前端热更新，`/api`、`/v1` 代理到 8790 |
-
-## Codex CLI 配置
-
-`~/.codex/config.toml`：
+Add to `~/.codex/config.toml`:
 
 ```toml
 model = "gpt-5.3-codex"
@@ -53,43 +100,69 @@ env_key = "CODEX_POOL_API_KEY"
 ```
 
 ```bash
-export CODEX_POOL_API_KEY="sk-cp-你在控制台创建的key"
+export CODEX_POOL_API_KEY="sk-cp-<key-from-admin-console>"
 codex
 ```
 
-## 路由（同一端口）
-
-| 路径 | 用途 |
-|------|------|
-| `/` | 管理后台（静态页，需 `web/dist`） |
-| `/api/v1/*` | 管理 API |
-| `/v1/*` | Codex CLI 代理 |
-| `/healthz` | 健康检查 |
-
-## 环境变量
-
-| 字段 | 说明 |
-|------|------|
-| `DATABASE_URL` | MySQL（必填） |
-| `REDIS_URL` | 配置热重载 |
-| `JWT_SECRET` / `ADMIN_*` | 管理后台登录 |
-| `WEB_DIST` | 前端构建目录（默认 `web/dist`） |
-
-## 验证
+Verify:
 
 ```bash
 curl http://127.0.0.1:8790/healthz
-curl -H "Authorization: Bearer sk-cp-你的key" http://127.0.0.1:8790/v1/models
+curl -H "Authorization: Bearer sk-cp-<your-key>" http://127.0.0.1:8790/v1/models
 ```
 
-Docker 全栈见 [DOCKER.md](./DOCKER.md)。**生产环境（2G VPS 一键部署）**见 [DEPLOY_PROD.md](./DEPLOY_PROD.md)。
+## Production deployment
 
-## ChatGPT 网页授权（上游）
+On a Linux VPS (example: 2 vCPU / 2 GB):
 
-管理后台 → **上游账号** → 类型选 **chatgpt (OAuth)** → 填写名称 → **打开网页授权**。
+```bash
+git clone https://github.com/Youlixiya/codex-pool.git && cd codex-pool
+uv sync
+cp .env.example .env
+# Set JWT_SECRET, ADMIN_PASSWORD, CORS_ORIGINS=https://your-domain
 
-流程与 Codex CLI 相同（PKCE + `localhost:1455` 回调），凭证写入 `~/.codex-pool/auth/<名称>.json`，保存后即可用于代理。
+cd web && npm install && npm run build && cd ..
 
-注意：本机 **1455 端口** 需空闲（若正在运行 `codex login` 会冲突）。也可在 `.env` 中调整 `CHATGPT_OAUTH_CALLBACK_PORT` 与 `CHATGPT_OAUTH_REDIRECT_URI`（须与 OpenAI 注册一致）。
+uv run codex-pool-admin --host 0.0.0.0 --port 8790 --log-level info
+```
 
-授权成功后，上游列表与编辑对话框会展示 **5 小时** 与 **一周** 额度（来自 ChatGPT `wham/usage` 接口，与 Codex CLI `/status` 同源）。
+- **Data directory:** `~/.codex-pool/` (`codex_pool.db`, `auth/` for OAuth tokens)
+- **systemd:** see [scripts/codex-pool.service.example](./scripts/codex-pool.service.example)
+- Put **Nginx / Caddy** in front for TLS; bind `--port 80` only if you accept running as root
+
+## Configuration (`.env`)
+
+Copy from [`.env.example`](./.env.example). Do not commit `.env`.
+
+| Variable | Description |
+|----------|-------------|
+| `JWT_SECRET` | Signs admin session tokens |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Bootstrap admin (created on first start) |
+| `CORS_ORIGINS` | Allowed origins for the admin UI |
+| `DATABASE_URL` | Optional; default `~/.codex-pool/codex_pool.db` |
+| `BILLING_*` | Per-million-token prices; usage cost in SQLite |
+| `CHATGPT_*` | OAuth callback port and auth directory |
+| `WEB_DIST` | Override path to built frontend |
+
+## ChatGPT OAuth upstream
+
+1. Admin → **Upstreams** → type **chatgpt (OAuth)** → **Open browser authorization**
+2. PKCE flow; tokens saved under `~/.codex-pool/auth/<name>.json`
+3. **Port 1455** must be free on the machine running authorization (configurable via `CHATGPT_OAUTH_CALLBACK_PORT`)
+
+## Migrate from legacy MySQL
+
+If you used an older Docker/MySQL deployment:
+
+```bash
+# MySQL expected at 127.0.0.1:3307, or pass --mysql-url
+uv run --with pymysql python scripts/migrate_mysql_to_sqlite.py
+```
+
+## Contributing
+
+Issues and PRs are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md).
+
+## License
+
+[MIT](./LICENSE) © contributors

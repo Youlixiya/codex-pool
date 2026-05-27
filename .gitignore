@@ -11,5 +11,4 @@ web/node_modules/
 .codex/
 .cursor/skills/
 .env
-.env.prod
 .DS_Store

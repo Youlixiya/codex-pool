@@ -6,7 +6,6 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..domain.entities import UsageLog
 from ..domain.schemas import ModelUsageRow
 from ..infrastructure.orm_models import ApiKeyORM, UsageLogORM
 
@@ -19,34 +18,6 @@ class UsageRepository:
     def _user_scope(user_id: int):
         key_ids = select(ApiKeyORM.id).where(ApiKeyORM.user_id == user_id)
         return UsageLogORM.api_key_id.in_(key_ids)
-
-    def create(
-        self,
-        *,
-        api_key_id: int | None,
-        upstream_name: str,
-        model: str | None,
-        input_tokens: int,
-        output_tokens: int,
-        cached_tokens: int,
-        cost_usd: Decimal,
-        status_code: int,
-        path: str,
-    ) -> UsageLog:
-        row = UsageLogORM(
-            api_key_id=api_key_id,
-            upstream_name=upstream_name,
-            model=model,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            cached_tokens=cached_tokens,
-            cost_usd=cost_usd,
-            status_code=status_code,
-            path=path,
-        )
-        self._session.add(row)
-        self._session.flush()
-        return self._to_entity(row)
 
     def today_stats(self, user_id: int) -> dict:
         today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -176,18 +147,3 @@ class UsageRepository:
             for r in rows
         ]
 
-    @staticmethod
-    def _to_entity(row: UsageLogORM) -> UsageLog:
-        return UsageLog(
-            id=row.id,
-            api_key_id=row.api_key_id,
-            upstream_name=row.upstream_name,
-            model=row.model,
-            input_tokens=row.input_tokens,
-            output_tokens=row.output_tokens,
-            cached_tokens=row.cached_tokens,
-            cost_usd=row.cost_usd,
-            status_code=row.status_code,
-            path=row.path,
-            created_at=row.created_at,
-        )
