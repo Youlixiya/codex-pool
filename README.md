@@ -16,7 +16,7 @@
 
 ## Why codex-pool?
 
-[Codex CLI](https://github.com/openai/codex) talks to upstream models through a configurable `base_url`. **codex-pool** sits in the middle: you manage upstream accounts and API keys in a browser, while developers point Codex at a single local endpoint. The proxy handles **routing, failover, usage metering, and billing estimates** — backed by a single **SQLite** file, no Redis or MySQL required.
+[Codex CLI](https://github.com/openai/codex) talks to upstream models through a configurable `base_url`. **codex-pool** sits in the middle: you manage upstream accounts and API keys in a browser, while developers point Codex at a single local endpoint. The proxy handles **routing, failover, usage metering, and billing estimates**.
 
 Ideal for individuals and small teams who want a lightweight account pool without operating a full API gateway stack.
 
@@ -27,24 +27,13 @@ Ideal for individuals and small teams who want a lightweight account pool withou
 | **Single process** | Admin UI, REST API, and OpenAI-compatible `/v1` proxy on one port |
 | **Multi-tenant** | Per-user registration, upstream pools, and API keys |
 | **Upstream pool** | Multiple accounts per user; automatic failover on errors |
-| **Usage & billing** | Token usage and cost estimates stored in SQLite (`BILLING_*`) |
+| **Usage & billing** | Token usage and cost estimates (`BILLING_*`) |
 | **ChatGPT OAuth** | Browser-based upstream authorization (PKCE, same flow as Codex CLI) |
 | **Quota dashboard** | 5-hour / weekly limits from ChatGPT usage API |
-| **Zero ops deps** | SQLite + optional file-based OAuth store under `~/.codex-pool/` |
+| **Local data** | Default data directory `~/.codex-pool/` (database and OAuth tokens) |
 | **Small VPS friendly** | Runs comfortably on 2 vCPU / 2 GB RAM |
 
-## Architecture
-
-```mermaid
-flowchart LR
-  CLI[Codex CLI] -->|Bearer sk-cp-*| Proxy["/v1 proxy"]
-  Browser[Admin UI] -->|JWT| API["/api/v1"]
-  Proxy --> Selector[Upstream selector]
-  Selector --> U1[Upstream A]
-  Selector --> U2[Upstream B]
-  API --> DB[(SQLite)]
-  Proxy --> DB
-```
+## Routes
 
 | Path | Purpose |
 |------|---------|
@@ -140,7 +129,7 @@ Copy from [`.env.example`](./.env.example). Do not commit `.env`.
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Bootstrap admin (created on first start) |
 | `CORS_ORIGINS` | Allowed origins for the admin UI |
 | `DATABASE_URL` | Optional; default `~/.codex-pool/codex_pool.db` |
-| `BILLING_*` | Per-million-token prices; usage cost in SQLite |
+| `BILLING_*` | Per-million-token prices; usage and cost tracking |
 | `CHATGPT_*` | OAuth callback port and auth directory |
 | `WEB_DIST` | Override path to built frontend |
 
@@ -149,15 +138,6 @@ Copy from [`.env.example`](./.env.example). Do not commit `.env`.
 1. Admin → **Upstreams** → type **chatgpt (OAuth)** → **Open browser authorization**
 2. PKCE flow; tokens saved under `~/.codex-pool/auth/<name>.json`
 3. **Port 1455** must be free on the machine running authorization (configurable via `CHATGPT_OAUTH_CALLBACK_PORT`)
-
-## Migrate from legacy MySQL
-
-If you used an older Docker/MySQL deployment:
-
-```bash
-# MySQL expected at 127.0.0.1:3307, or pass --mysql-url
-uv run --with pymysql python scripts/migrate_mysql_to_sqlite.py
-```
 
 ## Contributing
 

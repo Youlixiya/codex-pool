@@ -2,7 +2,7 @@
 
 # codex-pool
 
-**自托管 Codex CLI 账号池：Web 管理台 + 单端口 `/v1` 代理，SQLite 单文件，无需 MySQL / Redis。**
+**自托管 Codex CLI 账号池：Web 管理台 + 单端口 `/v1` 代理。**
 
 [English](./README.md) · [反馈问题](https://github.com/Youlixiya/codex-pool/issues)
 
@@ -15,30 +15,19 @@
 
 ## 简介
 
-[Codex CLI](https://github.com/openai/codex) 通过 `base_url` 访问模型。**codex-pool** 作为中间层：在浏览器里配置上游账号、签发 API Key，开发者只需把 Codex 指向本机一个地址。代理负责**路由、故障转移、用量统计与费用估算**，数据全部落在 **SQLite** 单文件中，适合个人与小团队轻量部署。
+[Codex CLI](https://github.com/openai/codex) 通过 `base_url` 访问模型。**codex-pool** 作为中间层：在浏览器里配置上游账号、签发 API Key，开发者只需把 Codex 指向本机一个地址。代理负责**路由、故障转移、用量统计与费用估算**，适合个人与小团队轻量部署。
 
 ## 特性
 
 - **单进程单端口** — 管理后台、REST API、`/v1` 代理一体
 - **多租户** — 注册、独立上游池与 API Key
 - **上游池与 failover** — 多账号按序尝试，失败自动切换
-- **用量与计费** — Token 用量与预估费用写入 SQLite
+- **用量与计费** — Token 用量与预估费用统计
 - **ChatGPT OAuth** — 网页授权上游（PKCE，与 Codex CLI 同源流程）
 - **额度面板** — 展示 5 小时 / 一周额度（ChatGPT usage API）
 - **运维简单** — 默认数据目录 `~/.codex-pool/`，2 核 2G 可跑
 
-## 架构
-
-```mermaid
-flowchart LR
-  CLI[Codex CLI] -->|Bearer sk-cp-*| Proxy["/v1 代理"]
-  Browser[管理后台] -->|JWT| API["/api/v1"]
-  Proxy --> Selector[上游选择器]
-  Selector --> U1[上游 A]
-  Selector --> U2[上游 B]
-  API --> DB[(SQLite)]
-  Proxy --> DB
-```
+## 路由
 
 | 路径 | 说明 |
 |------|------|
@@ -122,13 +111,6 @@ uv run codex-pool-admin --host 0.0.0.0 --port 8790 --log-level info
 ## ChatGPT 网页授权
 
 管理后台 → **上游账号** → **chatgpt (OAuth)** → **打开网页授权**。本机 **1455** 端口需空闲（可通过 `CHATGPT_OAUTH_CALLBACK_PORT` 修改）。
-
-## 从旧版 MySQL 迁移
-
-```bash
-uv run --with pymysql python scripts/migrate_mysql_to_sqlite.py
-# 默认连接 127.0.0.1:3307，可用 --mysql-url 指定
-```
 
 ## 参与贡献
 
