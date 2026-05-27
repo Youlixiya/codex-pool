@@ -9,6 +9,6 @@ web/dist/
 web/node_modules/
 .codegraph/
 .codex/
-.cursor/skills/
+.cursor/
 .env
 .DS_Store
