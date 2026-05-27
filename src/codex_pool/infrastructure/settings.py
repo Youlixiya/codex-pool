@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     chatgpt_oauth_callback_port: int = 1455
     chatgpt_usage_url: str = "https://chatgpt.com/backend-api/wham/usage"
 
+    # Upstream forwarding: retries on transient disconnects (see proxy/forward.py).
+    proxy_upstream_max_retries: int = 3
+    proxy_upstream_retry_backoff_seconds: float = 0.5
+    # Disable HTTP keep-alive to upstream when True (helps flaky relays with stale pooled connections).
+    proxy_upstream_disable_keepalive: bool = False
+
     def resolved_database_url(self) -> str:
         url = (self.database_url or "").strip()
         return url or default_database_url()

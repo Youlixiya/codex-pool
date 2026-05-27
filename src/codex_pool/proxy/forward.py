@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 
@@ -8,6 +9,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from ..infrastructure.http_client import build_async_client
+from ..infrastructure.settings import get_settings
 from .billing import (
     extract_usage_from_json,
     extract_usage_from_sse,
@@ -29,6 +31,38 @@ logger = logging.getLogger(__name__)
 
 TIMEOUT = httpx.Timeout(connect=30.0, read=600.0, write=120.0, pool=30.0)
 
+_TRANSIENT_MSG = (
+    "disconnected",
+    "connection reset",
+    "connection refused",
+    "broken pipe",
+    "eof occurred",
+    "timed out",
+    "timeout",
+    "incomplete read",
+    "server closed",
+)
+
+
+def is_transient_upstream_error(exc: BaseException) -> bool:
+    if isinstance(
+        exc,
+        (
+            httpx.RemoteProtocolError,
+            httpx.ConnectError,
+            httpx.ReadError,
+            httpx.WriteError,
+            httpx.PoolTimeout,
+            httpx.ConnectTimeout,
+            httpx.ReadTimeout,
+        ),
+    ):
+        return True
+    if isinstance(exc, httpx.HTTPError):
+        msg = str(exc).lower()
+        return any(needle in msg for needle in _TRANSIENT_MSG)
+    return False
+
 
 def is_streaming_body(body: bytes) -> bool:
     if not body:
@@ -41,11 +75,61 @@ def is_streaming_body(body: bytes) -> bool:
 
 
 def _build_client() -> httpx.AsyncClient:
+    settings = get_settings()
+    limits = (
+        httpx.Limits(max_keepalive_connections=0, max_connections=100)
+        if settings.proxy_upstream_disable_keepalive
+        else httpx.Limits(max_keepalive_connections=20, max_connections=100, keepalive_expiry=30.0)
+    )
     return build_async_client(
         timeout=TIMEOUT,
         follow_redirects=True,
         http2=False,
+        limits=limits,
     )
+
+
+async def _send_upstream(
+    client: httpx.AsyncClient,
+    *,
+    upstream_name: str,
+    method: str,
+    url: str,
+    headers: dict[str, str],
+    body: bytes | None,
+    stream: bool,
+) -> httpx.Response:
+    settings = get_settings()
+    max_attempts = max(1, settings.proxy_upstream_max_retries)
+    backoff = max(0.0, settings.proxy_upstream_retry_backoff_seconds)
+    last_exc: httpx.HTTPError | None = None
+
+    for attempt in range(max_attempts):
+        try:
+            req = client.build_request(
+                method,
+                url,
+                headers=headers,
+                content=body if body else None,
+            )
+            return await client.send(req, stream=stream)
+        except httpx.HTTPError as exc:
+            last_exc = exc
+            if attempt + 1 >= max_attempts or not is_transient_upstream_error(exc):
+                raise
+            delay = backoff * (2**attempt)
+            logger.warning(
+                "%s: %s (retry %d/%d in %.1fs)",
+                upstream_name,
+                exc,
+                attempt + 1,
+                max_attempts,
+                delay,
+            )
+            await asyncio.sleep(delay)
+
+    assert last_exc is not None
+    raise last_exc
 
 
 async def forward_request(
@@ -81,13 +165,15 @@ async def forward_request(
             headers["authorization"] = auth
 
             try:
-                req = client.build_request(
-                    request.method,
-                    url,
+                resp = await _send_upstream(
+                    client,
+                    upstream_name=upstream.name,
+                    method=request.method,
+                    url=url,
                     headers=headers,
-                    content=body if body else None,
+                    body=body if body else None,
+                    stream=stream,
                 )
-                resp = await client.send(req, stream=stream)
             except httpx.HTTPError as exc:
                 msg = f"{upstream.name}: {exc}"
                 logger.warning(msg)
@@ -184,7 +270,12 @@ async def _stream_chunks(
                 buffer.extend(chunk)
             yield chunk
     except httpx.HTTPError as exc:
-        logger.warning("upstream stream read error: %s", exc)
+        logger.warning(
+            "%s: upstream stream read error: %s (received %d bytes)",
+            upstream_name,
+            exc,
+            len(buffer),
+        )
     finally:
         try:
             await resp.aclose()
