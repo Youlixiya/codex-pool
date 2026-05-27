@@ -64,23 +64,32 @@ cd web && npm run dev   # http://127.0.0.1:5173，API 代理到 8790
 
 ## Codex CLI 配置
 
-`~/.codex/config.toml`：
+将 Codex 指向本池的 `/v1`，需同时配置 **`~/.codex/config.toml`** 与 **`~/.codex/auth.json`**（可用 `CODEX_HOME` 改目录）。凭证写在 `auth.json` 的 `OPENAI_API_KEY`，**无需环境变量**。
+
+在管理后台 **API Keys** → **配置说明** 可复制与当前 Key 名称、访问地址完全一致的片段。以下为 Key 名 `default`、本机 `8790` 的示例：
+
+**`~/.codex/config.toml`**
 
 ```toml
-model = "gpt-5.3-codex"
-model_provider = "codex-pool"
+model = "gpt-5.5"
+model_provider = "codex-pool-default"
 
-[model_providers.codex-pool]
+[model_providers.codex-pool-default]
 name = "OpenAI"
 base_url = "http://127.0.0.1:8790/v1"
 wire_api = "responses"
-env_key = "CODEX_POOL_API_KEY"
 ```
 
-```bash
-export CODEX_POOL_API_KEY="sk-cp-控制台创建的key"
-codex
+**`~/.codex/auth.json`**
+
+```json
+{
+  "auth_mode": "apikey",
+  "OPENAI_API_KEY": "sk-cp-你的完整API_Key"
+}
 ```
+
+保存后运行 `codex`；也可在列表使用 **CC Switch** 一键导入。
 
 ## 服务器部署（2 核 2G）
 

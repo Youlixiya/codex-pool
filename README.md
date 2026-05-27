@@ -75,23 +75,32 @@ Visit **http://127.0.0.1:5173** for hot reload.
 
 ## Codex CLI
 
-Add to `~/.codex/config.toml`:
+Point Codex at this pool’s `/v1` endpoint with **two files** under `~/.codex/` (or set `CODEX_HOME` to another directory). Credentials live in `auth.json` — **no environment variables**.
+
+Create an API key in the admin UI (**API Keys** → **配置说明** / config guide) and copy the exact snippets for your key name and host. Example for a key named `default` on `http://127.0.0.1:8790`:
+
+**`~/.codex/config.toml`**
 
 ```toml
-model = "gpt-5.3-codex"
-model_provider = "codex-pool"
+model = "gpt-5.5"
+model_provider = "codex-pool-default"
 
-[model_providers.codex-pool]
+[model_providers.codex-pool-default]
 name = "OpenAI"
 base_url = "http://127.0.0.1:8790/v1"
 wire_api = "responses"
-env_key = "CODEX_POOL_API_KEY"
 ```
 
-```bash
-export CODEX_POOL_API_KEY="sk-cp-<key-from-admin-console>"
-codex
+**`~/.codex/auth.json`**
+
+```json
+{
+  "auth_mode": "apikey",
+  "OPENAI_API_KEY": "sk-cp-<your-full-api-key>"
+}
 ```
+
+Then run `codex`. You can also use **CC Switch** in the key list for one-click import.
 
 Verify:
 
