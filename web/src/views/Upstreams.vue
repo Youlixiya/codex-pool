@@ -287,14 +287,6 @@
               </el-button>
             </div>
           </el-form-item>
-
-          <el-form-item label="Auth 文件（高级）">
-            <el-input
-              v-model="form.auth_file"
-              placeholder="也可手动填写 ~/.codex/auth.json 路径"
-              @blur="onAuthFileBlur"
-            />
-          </el-form-item>
         </template>
 
         <el-form-item label="优先级"><el-input-number v-model="form.priority" :min="1" style="width: 100%" /></el-form-item>
@@ -425,13 +417,6 @@ async function loadDialogQuota() {
     quotaError.value = err.response?.data?.detail || "无法获取额度";
   } finally {
     quotaLoading.value = false;
-  }
-}
-
-function onAuthFileBlur() {
-  if (form.type === "chatgpt" && form.auth_file) {
-    oauthAuthorized.value = true;
-    loadDialogQuota();
   }
 }
 
@@ -607,7 +592,7 @@ function openDialog(row, defaultType) {
 
 async function save() {
   if (form.type === "chatgpt" && !form.auth_file) {
-    ElMessage.warning("请先完成 ChatGPT 网页授权，或手动填写 Auth 文件路径");
+    ElMessage.warning("请先完成 ChatGPT 网页授权，或通过 auth.json 内容导入");
     return;
   }
   saving.value = true;
